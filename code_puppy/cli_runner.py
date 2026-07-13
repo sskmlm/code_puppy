@@ -182,7 +182,7 @@ async def main():
         "-r",
         type=str,
         metavar="PATH",
-        help="Resume a saved session from a .pkl file (e.g. ~/.code_puppy/contexts/foo.pkl)",
+        help="Resume a saved session from a .json file (e.g. ~/.code_puppy/contexts/foo.json)",
     )
     parser.add_argument(
         "--quick-resume",
@@ -1052,7 +1052,7 @@ async def interactive_mode(message_renderer, initial_command: str = None) -> Non
                                 agent.estimate_tokens_for_message(msg)
                                 for msg in history
                             )
-                            session_path = base_dir / f"{chosen_session}.pkl"
+                            session_path = base_dir / f"{chosen_session}.json"
 
                             emit_success(
                                 t(
