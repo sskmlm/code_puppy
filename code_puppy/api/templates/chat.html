@@ -1218,7 +1218,7 @@
             
             let wsUrl = CONFIG.wsUrl;
             if (CONFIG.sessionId) {
-                wsUrl += `?session_id=${CONFIG.sessionId}`;
+                wsUrl += `?session_id=${encodeURIComponent(CONFIG.sessionId)}`;
             }
             
             socket = new WebSocket(wsUrl);
@@ -1744,15 +1744,26 @@
                     <div class="perm-card-desc">${escapeHtml(String(description))}</div>
                     <div class="perm-card-cmd">${escapeHtml(command)}</div>
                     <div class="perm-card-cwd">${escapeHtml(cwd)}</div>
-                    <div class="perm-card-actions">
-                      <button class="perm-card-btn perm-btn-ok" onclick="approvePermission('${requestId}')">Approve</button>
-                      <button class="perm-card-btn perm-btn-no" onclick="denyPermission('${requestId}')">Deny</button>
-                    </div>
+                    <div class="perm-card-actions"></div>
                     <div class="perm-card-timeout">Timeout in ${timeout}s</div>
                   </div>
                 </div>
             `;
-            
+
+            const actions = bubble.querySelector('.perm-card-actions');
+            const approveBtn = document.createElement('button');
+            approveBtn.className = 'perm-card-btn perm-btn-ok';
+            approveBtn.textContent = 'Approve';
+            approveBtn.addEventListener('click', () => approvePermission(requestId));
+
+            const denyBtn = document.createElement('button');
+            denyBtn.className = 'perm-card-btn perm-btn-no';
+            denyBtn.textContent = 'Deny';
+            denyBtn.addEventListener('click', () => denyPermission(requestId));
+
+            actions.appendChild(approveBtn);
+            actions.appendChild(denyBtn);
+
             messagesContainer.appendChild(bubble);
             messagesContainer.scrollTop = messagesContainer.scrollHeight;
         }
