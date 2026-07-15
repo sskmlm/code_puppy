@@ -23,6 +23,7 @@ from typing import TYPE_CHECKING, Any, List, Optional
 
 from acp.schema import Usage
 
+from code_puppy.api.turn_runtime import AgentTurn, sync_agent_history
 from code_puppy.plugins.acp import commands, content, persistence, state
 
 if TYPE_CHECKING:
@@ -114,16 +115,26 @@ class ACPSession:
         result: Any = None
         error: Optional[BaseException] = None
         try:
-            self._task = asyncio.ensure_future(
-                self.agent.run_with_mcp(
-                    text,
-                    attachments=parsed.attachments or None,
-                    link_attachments=parsed.link_attachments or None,
-                )
+            turn = AgentTurn(
+                self.agent,
+                text,
+                {
+                    "attachments": parsed.attachments or None,
+                    "link_attachments": parsed.link_attachments or None,
+                },
             )
-            result = await self._task
-            self._absorb_history(result)
-            stop_reason = STOP_END_TURN
+            self._task = turn.task
+            outcome = await turn.wait()
+            result = outcome.result
+            if outcome.cancelled:
+                stop_reason = STOP_CANCELLED
+            elif outcome.error is not None:
+                error = outcome.error
+                logger.exception("ACP: agent run failed", exc_info=outcome.error)
+                stop_reason = STOP_REFUSAL
+            else:
+                sync_agent_history(self.agent, result)
+                stop_reason = STOP_END_TURN
         except asyncio.CancelledError:
             # Two ways we land here:
             #  * our own session/cancel cancelled the inner run task -> it is
@@ -168,27 +179,6 @@ class ACPSession:
         elif stop_reason == STOP_REFUSAL:
             await self._send_error_notice(error)
         return PromptResult(stop_reason, _to_acp_usage(result))
-
-    def _absorb_history(self, result: Any) -> None:
-        """Fold a completed run's full message list back into the agent.
-
-        ``run_with_mcp`` (the shared runtime) does NOT write the turn's
-        request+response back onto ``agent._message_history`` on the normal
-        path -- the caller must, exactly as ``cli_runner`` does after each
-        interactive turn. Without this the agent forgets every turn the moment
-        it ends: the next prompt runs with empty history, and persistence saves
-        a history containing only the user's prompt (no assistant reply). So we
-        replace the agent's history with ``result.all_messages()`` here, which
-        is what makes ACP multi-turn memory *and* load/resume replay real.
-        """
-        if result is None:
-            return
-        try:
-            messages = result.all_messages()
-        except Exception:  # noqa: BLE001
-            return
-        if messages:
-            self.agent.set_message_history(list(messages))
 
     def cancel(self) -> None:
         """Cancel the in-flight run, if any. No-op when idle.

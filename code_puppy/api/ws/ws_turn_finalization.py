@@ -19,6 +19,7 @@ import time as time_module
 from dataclasses import dataclass, field
 from typing import Any, Awaitable, Callable, Iterable
 
+from code_puppy.api.turn_runtime import sync_agent_history
 from code_puppy.api.ws.schemas import ServerToolResult
 
 
@@ -144,9 +145,8 @@ async def finalize_turn_history(
         return finalized
 
     try:
-        all_msgs = list(result.all_messages())
+        all_msgs = sync_agent_history(agent, result)
         if all_msgs:
-            agent.set_message_history(all_msgs)
             finalized.history_snapshot = list(agent.get_message_history())
             logger.debug(
                 "Updated message history from result.all_messages(): %s messages",
