@@ -45,6 +45,7 @@ import logging
 from typing import Any
 
 from code_puppy.api.db.queries import session_exists, write_turn_to_sqlite
+from code_puppy.api.turn_runtime import sync_agent_history
 
 logger = logging.getLogger(__name__)
 
@@ -127,8 +128,7 @@ async def save_agent_result_in_background(
         # 2. Sync completed messages back onto the agent instance.
         # ------------------------------------------------------------------
         try:
-            all_msgs = result.all_messages()
-            agent.set_message_history(all_msgs)
+            sync_agent_history(agent, result)
         except Exception as exc:
             logger.warning(
                 "[BG:%s] Could not extract messages from result (%s): %s",

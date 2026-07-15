@@ -18,19 +18,14 @@ from typing import Any, Callable
 from fastapi import WebSocketDisconnect
 from pydantic import TypeAdapter, ValidationError
 
+from code_puppy.api.turn_runtime import AgentTurn
 from code_puppy.api.ws.chat_context import (
     begin_agent_run_context,
     cleanup_agent_run_context,
 )
 from code_puppy.api.ws.chat_turn_state import WebSocketTurnState
 from code_puppy.api.ws.schemas import ClientMessage
-from code_puppy.messaging.bus import get_message_bus
-from code_puppy.messaging.commands import (
-    AskUserQuestionResponse,
-    ConfirmationResponse,
-    SelectionResponse,
-    UserInputResponse,
-)
+from code_puppy.api.ws.ui_extensions import handle_browser_ui_extension_response
 
 _ClientMessageAdapter = TypeAdapter(ClientMessage)
 logger = logging.getLogger(__name__)
@@ -38,48 +33,7 @@ logger = logging.getLogger(__name__)
 
 def handle_user_interaction_response(message: dict[str, Any]) -> bool:
     """Resolve MessageBus user-interaction responses during an active turn."""
-    msg_type = message.get("type")
-    if msg_type not in {
-        "user_input_response",
-        "confirmation_response",
-        "selection_response",
-        "ask_user_question_response",
-    }:
-        return False
-
-    bus = get_message_bus()
-    if msg_type == "user_input_response":
-        bus.provide_response(
-            UserInputResponse(
-                prompt_id=message.get("prompt_id", ""),
-                value=message.get("value", ""),
-            )
-        )
-    elif msg_type == "confirmation_response":
-        bus.provide_response(
-            ConfirmationResponse(
-                prompt_id=message.get("prompt_id", ""),
-                confirmed=bool(message.get("confirmed", False)),
-                feedback=message.get("feedback"),
-            )
-        )
-    elif msg_type == "selection_response":
-        bus.provide_response(
-            SelectionResponse(
-                prompt_id=message.get("prompt_id", ""),
-                selected_index=int(message.get("selected_index", -1)),
-                selected_value=message.get("selected_value", ""),
-            )
-        )
-    else:
-        bus.provide_response(
-            AskUserQuestionResponse(
-                prompt_id=message.get("prompt_id", ""),
-                answers=message.get("answers") or [],
-                cancelled=bool(message.get("cancelled", False)),
-            )
-        )
-    return True
+    return handle_browser_ui_extension_response(message)
 
 
 async def save_agent_result_in_background(**kwargs: Any) -> None:
@@ -132,9 +86,8 @@ async def execute_turn_runner(
     """
 
     _ws_run_context = begin_agent_run_context(session_id=session_id)
-    active_agent_task = asyncio.create_task(
-        agent.run_with_mcp(message_to_send, **run_kwargs)
-    )
+    agent_turn = AgentTurn(agent, message_to_send, run_kwargs)
+    active_agent_task = agent_turn.task
 
     result = None
     agent_completed = False
@@ -149,31 +102,28 @@ async def execute_turn_runner(
             )
 
             if active_agent_task in done:
-                try:
-                    result = await active_agent_task
-                    logger.debug(
-                        "run_with_mcp completed, result type: %s", type(result)
-                    )
-                    agent_completed = True
-                    active_agent_task = None
-                except asyncio.CancelledError:
+                outcome = await agent_turn.wait()
+                result = outcome.result
+                if outcome.cancelled:
                     logger.debug("run_with_mcp task was cancelled by user")
                     turn_state.agent_error = "cancelled"
-                    result = None
-                    agent_completed = True
-                    active_agent_task = None
-                except Exception as e:
-                    logger.error("Agent task error: %s", e, exc_info=True)
+                elif outcome.error is not None:
+                    logger.error(
+                        "Agent task error: %s", outcome.error, exc_info=outcome.error
+                    )
                     logger.debug(
                         "[WS:%s] agent task exception captured: type=%s repr=%r",
                         session_id,
-                        type(e).__name__,
-                        e,
+                        type(outcome.error).__name__,
+                        outcome.error,
                     )
-                    turn_state.agent_error = e
-                    result = None
-                    agent_completed = True
-                    active_agent_task = None
+                    turn_state.agent_error = outcome.error
+                else:
+                    logger.debug(
+                        "run_with_mcp completed, result type: %s", type(result)
+                    )
+                agent_completed = True
+                active_agent_task = None
 
                 if receive_task in pending:
                     receive_task.cancel()
@@ -236,7 +186,7 @@ async def execute_turn_runner(
                     elif new_msg.get("type") == "cancel":
                         logger.debug("Cancel request received during agent execution")
                         if active_agent_task and not active_agent_task.done():
-                            active_agent_task.cancel()
+                            agent_turn.cancel()
                             agent_completed = True
 
                     elif new_msg.get("type") in ("switch_session", "create_session"):
