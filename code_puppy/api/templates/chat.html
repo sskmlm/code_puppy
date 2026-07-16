@@ -1008,6 +1008,7 @@
         let currentMessageElement = null;
         let currentMessageId = null;
         let reconnectAttempts = 0;
+        let commandCatalog = [];
         const MAX_RECONNECT_ATTEMPTS = 5;
         
         // DOM Elements
@@ -1283,6 +1284,12 @@
                     break;
                 case 'config_value':
                     handleConfigValue(message);
+                    break;
+                case 'commands_available':
+                    handleCommandsAvailable(message);
+                    break;
+                case 'command_result':
+                    handleCommandResult(message);
                     break;
                 case 'working_directory_changed':
                     handleWorkingDirectoryChanged(message);
@@ -1567,6 +1574,20 @@
             }
         }
         
+        function handleCommandsAvailable(message) {
+            commandCatalog = Array.isArray(message.commands) ? message.commands : [];
+            window.codePuppyCommands = commandCatalog;
+            messageInput.title = commandCatalog.length
+                ? `Slash commands available: ${commandCatalog.map(command => '/' + command.name).join(', ')}`
+                : '';
+        }
+
+        function handleCommandResult(message) {
+            const output = message.output || message.result || message.error ||
+                (message.success ? `Ran ${message.command}` : `Could not run ${message.command}`);
+            addSystemMessage(output);
+        }
+
         function handleStatus(message) {
             if (message.status === 'thinking') {
                 setStatus('thinking');
@@ -2350,10 +2371,10 @@
             if (!content) return;
             
             if (socket && socket.readyState === WebSocket.OPEN) {
-                socket.send(JSON.stringify({
-                    type: 'message',
-                    content: content
-                }));
+                socket.send(JSON.stringify(content.startsWith('/')
+                    ? { type: 'command', command: content }
+                    : { type: 'message', content: content }
+                ));
                 
                 messageInput.value = '';
             }

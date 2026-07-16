@@ -435,11 +435,11 @@ class CodePuppyAgent(Agent):
         if connection is None:
             return
         try:
-            from code_puppy.command_line.command_registry import get_unique_commands
+            from code_puppy.command_catalog import get_command_catalog
 
             available = [
-                AvailableCommand(name=c.name, description=c.description)
-                for c in get_unique_commands()
+                AvailableCommand(name=command.name, description=command.description)
+                for command in get_command_catalog()
             ]
         except Exception:  # noqa: BLE001
             logger.debug("ACP: could not enumerate slash commands", exc_info=True)

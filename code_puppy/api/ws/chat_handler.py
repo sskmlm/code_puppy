@@ -56,6 +56,7 @@ from code_puppy.api.ws.response_frames import (
     build_assistant_text_stream_frames,
     parse_api_error,
 )
+from code_puppy.api.ws.command_catalog import browser_command_catalog
 from code_puppy.api.ws.ws_command_handler import handle_command_message
 from code_puppy.api.ws.ws_control_messages import handle_control_message
 from code_puppy.api.ws.schemas import (
@@ -65,6 +66,7 @@ from code_puppy.api.ws.schemas import (
     ServerAssistantMessageEnd,
     ServerAssistantMessageStart,
     ServerCancelled,
+    ServerCommandCatalog,
     ServerError,
     ServerStatus,
     ServerSystem,
@@ -182,6 +184,13 @@ def register_chat_endpoint(app: FastAPI) -> None:
         active_drain_task = runtime.active_drain_task
         active_agent_task = runtime.active_agent_task
         stop_draining = runtime.stop_draining
+
+        await send_typed(
+            ServerCommandCatalog(
+                commands=browser_command_catalog(),
+                session_id=session_id,
+            )
+        )
 
         try:
             get_message_bus().mark_renderer_active()

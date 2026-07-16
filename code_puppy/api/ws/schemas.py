@@ -69,6 +69,7 @@ class ServerMessageType(str, Enum):
     SESSION_META_UPDATED = "session_meta_updated"
     CONFIG_VALUE = "config_value"
     COMMAND_RESULT = "command_result"
+    COMMANDS_AVAILABLE = "commands_available"
     STATUS = "status"
     USER_MESSAGE = "user_message"
     ASSISTANT_MESSAGE_START = "assistant_message_start"
@@ -325,6 +326,14 @@ class ServerConfigValue(_BaseMessage):
     value: Any
     session_id: str
     success: Optional[bool] = None
+
+
+class ServerCommandCatalog(_BaseMessage):
+    """Browser-native slash-command catalogue for UI discovery/autocomplete."""
+
+    type: Literal["commands_available"] = "commands_available"
+    commands: List[Dict[str, Any]]
+    session_id: str
 
 
 class ServerCommandResult(_BaseMessage):
@@ -610,6 +619,7 @@ ServerMessage = Annotated[
         Annotated[ServerSessionMetaUpdated, Tag("session_meta_updated")],
         Annotated[ServerConfigValue, Tag("config_value")],
         Annotated[ServerCommandResult, Tag("command_result")],
+        Annotated[ServerCommandCatalog, Tag("commands_available")],
         Annotated[ServerStatus, Tag("status")],
         Annotated[ServerUserMessage, Tag("user_message")],
         Annotated[ServerAssistantMessageStart, Tag("assistant_message_start")],
