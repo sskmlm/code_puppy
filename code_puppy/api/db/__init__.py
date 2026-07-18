@@ -7,23 +7,25 @@ All database operations are async coroutines backed by aiosqlite.
 """
 
 from code_puppy.api.db.connection import close_db, get_db, init_db
-from code_puppy.api.db.queries import (
+from code_puppy.api.db.message_repository import (
     get_active_messages,
     get_next_seq,
-    get_session_metadata,
-    get_session_row,
     insert_compaction_log,
     insert_message,
-    insert_tool_call,
     mark_messages_compacted,
+    write_system_message_to_sqlite,
+)
+from code_puppy.api.db.session_repository import (
+    get_session_metadata,
+    get_session_row,
     session_exists,
     soft_delete_session,
     update_session_stats,
     update_session_working_directory,
     upsert_session,
-    write_system_message_to_sqlite,
-    write_turn_to_sqlite,
 )
+from code_puppy.api.db.tool_call_repository import insert_tool_call
+from code_puppy.api.db.turn_writer import write_turn_to_sqlite
 
 __all__ = [
     "init_db",

@@ -7,34 +7,32 @@ Now exclusively uses SQLite as the source of truth.
 import json
 import logging
 from datetime import datetime, timezone
-from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, HTTPException, Query
 
-from code_puppy.api.db.queries import (
-    get_active_messages,
-    get_session_history_parity,
+from code_puppy.api.db.history_repository import get_session_history_parity
+from code_puppy.api.db.message_repository import get_active_messages
+from code_puppy.api.db.session_repository import (
     get_session_metadata,
-    get_session_tool_calls,
     soft_delete_session,
     update_session_meta_fields,
 )
-from code_puppy.config import get_ws_sessions_dir
+from code_puppy.api.db.tool_call_repository import get_session_tool_calls
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
 
-def _get_ws_sessions_dir() -> Path:
-    """Get the WebSocket sessions directory."""
-    return get_ws_sessions_dir()
-
-
-def _validate_session_name(session_name: str, ws_dir: Path) -> str:
-    """Validate session name prevents path traversal."""
-    if not session_name or ".." in session_name or "/" in session_name:
+def _validate_session_name(session_name: str) -> str:
+    """Reject identifiers that could be interpreted as paths."""
+    if (
+        not session_name
+        or ".." in session_name
+        or "/" in session_name
+        or "\\" in session_name
+    ):
         raise HTTPException(400, "Invalid session name")
     return session_name
 
@@ -70,7 +68,7 @@ async def get_ws_session_messages(
         - seq: ordering key
         - Plus type-specific fields (content for messages, result_json for tool_calls, etc.)
     """
-    _validate_session_name(session_name, _get_ws_sessions_dir())
+    _validate_session_name(session_name)
 
     try:
         # ──────────────────────────────────────────────────────────────────
@@ -194,7 +192,7 @@ async def get_ws_session_tool_calls(session_name: str) -> List[Dict[str, Any]]:
     Returns:
         List of tool_call rows with id, tool_name, args_json, result_json, status, etc.
     """
-    _validate_session_name(session_name, _get_ws_sessions_dir())
+    _validate_session_name(session_name)
 
     try:
         rows = await get_session_tool_calls(session_name)
@@ -226,7 +224,7 @@ async def get_ws_session_tool_calls(session_name: str) -> List[Dict[str, Any]]:
 @router.delete("/{session_name}")
 async def delete_ws_session(session_name: str) -> Dict[str, str]:
     """Soft-delete a WebSocket session in SQLite."""
-    _validate_session_name(session_name, _get_ws_sessions_dir())
+    _validate_session_name(session_name)
 
     # Soft delete in SQLite
     try:
@@ -249,7 +247,7 @@ async def update_ws_session(
 
     Supports updating: title, project_id, pinned.
     """
-    _validate_session_name(session_name, _get_ws_sessions_dir())
+    _validate_session_name(session_name)
 
     # Get current metadata
     current_meta = await get_session_metadata(session_name)

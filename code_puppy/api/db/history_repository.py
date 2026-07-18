@@ -1,3 +1,12 @@
+"""Queries that reconstruct interleaved session history."""
+
+from __future__ import annotations
+
+from typing import Any
+
+from code_puppy.api.db.connection import get_db
+
+_HISTORY_SQL = """
 SELECT
     'message' AS row_type,
     CAST(m.id AS TEXT) AS row_id,
@@ -24,7 +33,7 @@ SELECT
     NULL AS error_text,
     NULL AS parent_message_seq
 FROM messages m
-WHERE m.session_id = ?
+WHERE m.session_id = ? AND (? OR m.compacted = 0)
 
 UNION ALL
 
@@ -56,4 +65,18 @@ SELECT
 FROM tool_calls tc
 WHERE tc.session_id = ?
 
-ORDER BY seq;
+ORDER BY seq
+"""
+
+
+async def get_session_history_parity(
+    session_id: str,
+    *,
+    include_compacted: bool = True,
+) -> list[dict[str, Any]]:
+    """Return messages and tool calls in their shared sequence order."""
+    cursor = await get_db().execute(
+        _HISTORY_SQL,
+        (session_id, int(include_compacted), session_id),
+    )
+    return [dict(row) for row in await cursor.fetchall()]

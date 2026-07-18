@@ -41,19 +41,23 @@ async def _unused_async(*args, **kwargs):
     raise AssertionError("test stub should be monkeypatched before use")
 
 
-_queries_stub = types.ModuleType("code_puppy.api.db.queries")
-_queries_stub.get_active_messages = _unused_async
-_queries_stub.get_session_history_parity = _unused_async
-_queries_stub.get_session_metadata = _unused_async
-_queries_stub.get_session_tool_calls = _unused_async
-_queries_stub.soft_delete_session = _unused_async
-_queries_stub.update_session_meta_fields = _unused_async
-sys.modules.setdefault("code_puppy.api.db.queries", _queries_stub)
+_history_stub = types.ModuleType("code_puppy.api.db.history_repository")
+_history_stub.get_session_history_parity = _unused_async
+sys.modules.setdefault("code_puppy.api.db.history_repository", _history_stub)
 
+_message_stub = types.ModuleType("code_puppy.api.db.message_repository")
+_message_stub.get_active_messages = _unused_async
+sys.modules.setdefault("code_puppy.api.db.message_repository", _message_stub)
 
-_config_stub = types.ModuleType("code_puppy.config")
-_config_stub.get_ws_sessions_dir = lambda: Path("/tmp/code-puppy-test-ws-sessions")
-sys.modules.setdefault("code_puppy.config", _config_stub)
+_session_stub = types.ModuleType("code_puppy.api.db.session_repository")
+_session_stub.get_session_metadata = _unused_async
+_session_stub.soft_delete_session = _unused_async
+_session_stub.update_session_meta_fields = _unused_async
+sys.modules.setdefault("code_puppy.api.db.session_repository", _session_stub)
+
+_tool_call_stub = types.ModuleType("code_puppy.api.db.tool_call_repository")
+_tool_call_stub.get_session_tool_calls = _unused_async
+sys.modules.setdefault("code_puppy.api.db.tool_call_repository", _tool_call_stub)
 
 
 _original_router_init = Router.__init__
@@ -90,7 +94,7 @@ async def test_get_ws_session_messages_keeps_plain_legacy_rows(monkeypatch):
     monkeypatch.setattr(
         ws_sessions,
         "_validate_session_name",
-        lambda session_name, ws_dir: session_name,
+        lambda session_name: session_name,
     )
     monkeypatch.setattr(
         ws_sessions,
@@ -143,7 +147,7 @@ async def test_update_ws_session_supports_project_id(monkeypatch):
     monkeypatch.setattr(
         ws_sessions,
         "_validate_session_name",
-        lambda session_name, ws_dir: session_name,
+        lambda session_name: session_name,
     )
     monkeypatch.setattr(
         ws_sessions,
@@ -179,3 +183,11 @@ async def test_update_ws_session_supports_project_id(monkeypatch):
     assert result["title"] == "Renamed"
     assert result["project_id"] == "project-alpha"
     assert result["pinned"] is True
+
+
+@pytest.mark.parametrize("session_name", ["", "../secret", "a/b", "a\\b"])
+def test_validate_session_name_rejects_path_like_identifiers(session_name):
+    with pytest.raises(_HTTPException) as exc_info:
+        ws_sessions._validate_session_name(session_name)
+
+    assert exc_info.value.status_code == 400
