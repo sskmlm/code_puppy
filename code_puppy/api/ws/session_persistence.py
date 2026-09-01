@@ -20,6 +20,7 @@ from code_puppy.api.ws.history_utils import (
     build_enhanced_history,
     estimate_total_tokens,
 )
+from code_puppy.api.ws.schemas import ServerSessionMeta
 
 logger = logging.getLogger(__name__)
 
@@ -96,17 +97,16 @@ def build_session_meta_payload(
 
     Returns a plain dict ready for ``send_json`` / ``send_typed``.
     """
-    return {
-        "type": "session_meta",
-        "session_id": session_id,
-        "session_name": session_name,
-        "total_tokens": total_tokens,
-        "message_count": message_count,
-        "title": title,
-        "working_directory": working_directory,
-        "agent_name": agent_name,
-        "model_name": model_name,
-    }
+    return ServerSessionMeta(
+        session_id=session_id,
+        session_name=session_name,
+        total_tokens=total_tokens,
+        message_count=message_count,
+        title=title,
+        working_directory=working_directory,
+        agent_name=agent_name,
+        model_name=model_name,
+    ).model_dump(exclude_none=True)
 
 
 def build_session_update_payload(

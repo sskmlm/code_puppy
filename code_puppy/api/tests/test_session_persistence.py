@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from code_puppy.api.ws.schemas import ServerSessionMeta
 from code_puppy.api.ws.session_persistence import (
     build_session_meta_payload,
     build_session_update_payload,
@@ -113,6 +114,25 @@ def test_session_meta_payload_has_no_extra_keys():
         "model_name",
     }
     assert set(payload.keys()) == expected_keys
+
+
+def test_session_meta_payload_round_trips_through_server_schema():
+    payload = build_session_meta_payload(
+        session_id="session-rt",
+        session_name="session-rt",
+        total_tokens=7,
+        message_count=2,
+        title="round trip",
+        working_directory="/tmp/project",
+        agent_name="code-puppy",
+        model_name="gpt-5",
+    )
+
+    validated = ServerSessionMeta.model_validate(payload)
+
+    assert validated.type == "session_meta"
+    assert validated.message_count == 2
+    assert validated.working_directory == "/tmp/project"
 
 
 # ---------------------------------------------------------------------------

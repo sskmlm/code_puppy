@@ -259,6 +259,24 @@ class ServerSystem(_BaseMessage):
     protocol_version: Optional[str] = None
 
 
+class ServerSessionMeta(_BaseMessage):
+    """Session snapshot sent after connect and after each persisted turn.
+
+    This frame gives the UI the authoritative session metadata needed to render
+    a thread header/state without calling a separate REST endpoint.
+    """
+
+    type: Literal["session_meta"] = "session_meta"
+    session_id: str
+    session_name: str
+    total_tokens: int
+    message_count: int
+    title: str
+    working_directory: str
+    agent_name: str
+    model_name: str
+
+
 class ServerSessionRestored(_BaseMessage):
     """Confirmation that an existing session was restored from storage.
 
@@ -604,6 +622,7 @@ ClientMessage = Annotated[
 ServerMessage = Annotated[
     Union[
         Annotated[ServerSystem, Tag("system")],
+        Annotated[ServerSessionMeta, Tag("session_meta")],
         Annotated[ServerSessionRestored, Tag("session_restored")],
         Annotated[ServerSessionSwitched, Tag("session_switched")],
         Annotated[ServerWorkingDirectoryChanged, Tag("working_directory_changed")],

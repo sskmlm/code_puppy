@@ -51,3 +51,4 @@ code_puppy/bundled_skills/
 # Local git worktrees
 .worktrees/
 .maestro/*
+.code_puppy/.maestro/
